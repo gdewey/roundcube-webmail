@@ -1,0 +1,74 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: roundcube-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ./db-data:/var/lib/mysql
+    networks:
+      - roundcube-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: roundcube-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 64mb
+      --maxmemory-policy allkeys-lru
+      --save 60 100
+    volumes:
+      - ./redis-data:/data
+    networks:
+      - roundcube-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  roundcubemail:
+    image: roundcube/roundcubemail:latest-apache
+    container_name: roundcubemail
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      ROUNDCUBEMAIL_DB_TYPE: mysql
+      ROUNDCUBEMAIL_DB_HOST: mysql
+      ROUNDCUBEMAIL_DB_PORT: "3306"
+      ROUNDCUBEMAIL_DB_NAME: ${MYSQL_DATABASE}
+      ROUNDCUBEMAIL_DB_USER: ${MYSQL_USER}
+      ROUNDCUBEMAIL_DB_PASSWORD: ${MYSQL_PASSWORD}
+      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://mail.strongserver.mx
+      ROUNDCUBEMAIL_DEFAULT_PORT: "993"
+      ROUNDCUBEMAIL_SMTP_SERVER: tls://mail.strongserver.mx
+      ROUNDCUBEMAIL_SMTP_PORT: "587"
+      ROUNDCUBEMAIL_SKIN: elastic
+      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,managesieve
+    volumes:
+      - ./www:/var/www/html
+      - ./config/custom.inc.php:/var/roundcube/config/custom.inc.php:ro
+    networks:
+      - roundcube-net
+
+networks:
+  roundcube-net:
+    driver: bridge
