@@ -48,7 +48,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8080:80"
+      - "${ROUNDCUBE_PORT:-8080}:80"
     environment:
       ROUNDCUBEMAIL_DB_TYPE: mysql
       ROUNDCUBEMAIL_DB_HOST: mysql
